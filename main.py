@@ -4,37 +4,85 @@ import time
 
 weights = []
 values = []
-itemCount = 20
 
-#item creation
+itemCountInput = ""
+itemCount = 0
+print("How much items do you want to generate for solving?")
+while itemCountInput == "":
+    itemCountInput = input(">> ")
+    try:
+        itemCount = int(itemCountInput)
+    except ValueError:
+        print("Only numbers allowed")
+        itemCountInput = ""
+
+
+def get_min_max_user_input():
+    inputString = ""
+    min = 0
+    max = 0
+    while inputString == "":
+        inputString = input(">> ")
+        try:
+            numbers = inputString.split(",")
+            if len(numbers) <= 2:
+                num1 = int(numbers[0])
+                num2 = int(numbers[1])
+                if num1 > num2:
+                    min = num2
+                    max = num1
+                else:
+                    min = num1
+                    max = num2
+            else:
+                print("More than two numbers inserted")
+                inputString = ""
+        except ValueError:
+            print("Only numbers allowed")
+            inputString = ""
+    return min, max
+
+
+print("What range of values you want to generate an items with?")
+print("Use ',' between two numbers!")
+vMin, vMax = get_min_max_user_input()
+
+print("What range of weights you want to generate an items with?")
+print("Use ',' between two numbers!")
+wMin, wMax = get_min_max_user_input()
+
+# item creation
 for i in range(itemCount):
-    weights.append(random.randint(1, 4))
-    values.append(random.randint(50, 200))
-    print(i,weights[i],values[i])
+    weights.append(random.randint(wMin, wMax))
+    values.append(random.randint(vMin, vMax))
+    print(i, weights[i], values[i])
 
-knapsackCapacity = 20
+knapsackCapacity = 15
+
 
 # brute force algorithm
 def knapsack_bruteforce(values, weights, capacity):
-    max_value = 0
-
+    maxValue = 0
+    best_combination = []
     for i in range(1, itemCount + 1):
         for combination in itertools.combinations(range(itemCount), i):
-            total_weight = sum(weights[j] for j in combination)
-            if total_weight <= capacity:
-                total_value = sum(values[j] for j in combination)
-                if total_value > max_value:
-                    max_value = total_value
+            totalWeight = sum(weights[j] for j in combination)
+            if totalWeight <= capacity:
+                totalValue = sum(values[j] for j in combination)
+                if totalValue > maxValue:
+                    maxValue = totalValue
                     best_combination = combination
+    if not best_combination:
+        return None
 
-    return max_value, list(best_combination)
+    return maxValue, list(best_combination)
 
 
 timeStart = time.time()
-theBest = knapsack_bruteforce(values,weights,knapsackCapacity)
+theBest = knapsack_bruteforce(values, weights, knapsackCapacity)
 timeStop = time.time()
 
 timeResult = timeStop - timeStart
 
 print(theBest)
-print("TIME "+str(timeResult))
+print("TIME " + str(timeResult))
