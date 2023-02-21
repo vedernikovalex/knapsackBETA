@@ -1,7 +1,6 @@
 import random
 import itertools
 import time
-import numpy
 import multiprocessing
 
 
@@ -146,7 +145,6 @@ if __name__ == "__main__":
 
     timeResult = timeStop - timeStart
 
-
     print("Non parallelized")
     print(theBest)
     print("TIME " + str(timeResult))
@@ -157,7 +155,6 @@ if __name__ == "__main__":
     timeStop2 = time.time()
 
     timeResultParallelized = timeStop2 - timeStart2
-
 
     print("parallelized")
     print(theBestParallel)
