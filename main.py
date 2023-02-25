@@ -2,19 +2,10 @@ import random
 import itertools
 import time
 import multiprocessing
+import configparser
 
-
-def get_items_count_user_input():
-    itemCountInput = ""
-    print("How much items do you want to generate for solving?")
-    while itemCountInput == "":
-        itemCountInput = input(">> ")
-        try:
-            itemCount = int(itemCountInput)
-            return itemCount
-        except ValueError:
-            print("Only numbers allowed")
-            itemCountInput = ""
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 
 def generate_items(itemCount, wMin, wMax, vMin, vMax):
@@ -26,32 +17,6 @@ def generate_items(itemCount, wMin, wMax, vMin, vMax):
         values.append(random.randint(vMin, vMax))
         print(i, weights[i], values[i])
     return weights, values
-
-
-def get_min_max_user_input():
-    inputString = ""
-    min = 0
-    max = 0
-    while inputString == "":
-        inputString = input(">> ")
-        try:
-            numbers = inputString.split(",")
-            if len(numbers) == 2:
-                num1 = int(numbers[0])
-                num2 = int(numbers[1])
-                if num1 > num2:
-                    min = num2
-                    max = num1
-                else:
-                    min = num1
-                    max = num2
-            else:
-                print("Exactly two numbers required!")
-                inputString = ""
-        except ValueError:
-            print("Only numbers allowed!")
-            inputString = ""
-    return min, max
 
 
 # brute force algorithm
@@ -123,20 +88,37 @@ def knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
     return maxValue, list(bestCombination)
 
 
+def greedy_algorithm(weights, values, capacity):
+    valueWeightCoeficient = []
+    for v, w in zip(values, weights):
+        valueWeightCoeficient.append((v / w, v, w))
+    valueWeightCoeficient.sort(reverse=True)
+    bestCombination = []
+    weight = 0
+    value1 = 0
+    for i, v, w in valueWeightCoeficient:
+        if weight + w <= capacity:
+            bestCombination.append((v, w))
+            weight += w
+            value1 += v
+        else:
+            secondCombination = [(v, w)]
+            value2 = v
+            if value1 > value2:
+                return value1, bestCombination
+            else:
+                return value2, secondCombination
+
+
 if __name__ == "__main__":
-    itemCount = get_items_count_user_input()
-
-    print("What range of values you want to generate an items with?")
-    print("Use ',' between two numbers!")
-    vMin, vMax = get_min_max_user_input()
-
-    print("What range of weights you want to generate an items with?")
-    print("Use ',' between two numbers!")
-    wMin, wMax = get_min_max_user_input()
+    itemCount = int(config['Test1']['itemCount'])
+    vMin = int(config['Test1']['vMin'])
+    vMax = int(config['Test1']['vMax'])
+    wMin = int(config['Test1']['wMin'])
+    wMax = int(config['Test1']['wMax'])
+    knapsackCapacity = int(config['Test1']['knapsackCapacity'])
 
     weights, values = generate_items(itemCount, wMin, wMax, vMin, vMax)
-
-    knapsackCapacity = 15
 
     # Non parallelized
     timeStart = time.time()
@@ -150,12 +132,22 @@ if __name__ == "__main__":
     print("TIME " + str(timeResult))
 
     # parallelized
-    timeStart2 = time.time()
-    theBestParallel = knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
-    timeStop2 = time.time()
+    #timeStart2 = time.time()
+    #theBestParallel = knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
+    #timeStop2 = time.time()
 
-    timeResultParallelized = timeStop2 - timeStart2
+    #timeResultParallelized = timeStop2 - timeStart2
 
-    print("parallelized")
-    print(theBestParallel)
-    print("TIME " + str(timeResultParallelized))
+    #print("parallelized")
+    #print(theBestParallel)
+    #print("TIME " + str(timeResultParallelized))
+
+    timeStartGreedy = time.time()
+    theBestGreedy = greedy_algorithm(weights, values, knapsackCapacity)
+    timeStopGreedy = time.time()
+
+    timeResultGreedy = timeStopGreedy - timeStartGreedy
+
+    print("Greedy heuristic")
+    print(theBestGreedy)
+    print("TIME " + str(timeResultGreedy))
