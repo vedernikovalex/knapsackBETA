@@ -161,21 +161,34 @@ if __name__ == "__main__":
     chunks = [None] * size
     chunks[rank] = (weights[rank * chunk_size:(rank + 1) * chunk_size], values[rank * chunk_size:(rank + 1) * chunk_size])
 
-    chunk = comm.scatter(chunks, root=0)
-    w_chunk, v_chunk = chunk
+    def mpi_implementation_documentation():
+        chunk = comm.scatter(chunks, root=0)
+        w_chunk, v_chunk = chunk
 
-    total = 0
+        result = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), capacity)
+
+        results = comm.gather(result, root=0)
+        return results
+
+    def mpi_implementation_my():
+        total = 0
+        if rank == 0:
+            for i in range(1, size):
+                received_value = comm.recv(source=i)
+                total += received_value
+            return total
+        elif rank == 0 and size == 1:
+            total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
+            return total
+        elif rank > 0:
+            total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
+            comm.send(total, dest=0)
+
+    results = mpi_implementation_documentation()
+
     if rank == 0:
-        for i in range(1, size):
-            received_value = comm.recv(source=i)
-            total += received_value
-        print(total)
-    elif rank == 0 and size == 1:
-        total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
-        print(total)
-    elif rank > 0:
-        total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
-        comm.send(total, dest=0)
+        result = max(results, key=lambda x: x[0])[0]
+        print('Max value: ', result)
 
     # Non parallelized
     def run_bruteforce():
