@@ -160,12 +160,11 @@ if __name__ == "__main__":
     chunk_size = itemCount // size
     chunks = [None] * size
     chunks[rank] = (weights[rank * chunk_size:(rank + 1) * chunk_size], values[rank * chunk_size:(rank + 1) * chunk_size])
+    chunk = comm.scatter(chunks, root=0)
+    w_chunk, v_chunk = chunk
 
     def mpi_implementation_documentation():
-        chunk = comm.scatter(chunks, root=0)
-        w_chunk, v_chunk = chunk
-
-        result = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), capacity)
+        result = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
 
         results = comm.gather(result, root=0)
         return results
