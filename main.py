@@ -3,6 +3,7 @@ import itertools
 import time
 import multiprocessing
 import configparser
+from mpi4py import MPI
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -39,10 +40,8 @@ def knapsack_bruteforce(weights, values, itemCount, knapsackCapacity):
 
 # combinations algorithm
 def calc_combination(knapsackCapacity, weights, values, starIndex, endIndex, combinations, queue):
-    print("invoke calc")
     maxValue = 0
     bestCombination = []
-    print(starIndex, endIndex)
     for i in range(starIndex, endIndex):
         combination = combinations[i]
         totalWeight = sum(weights[j] for j in combination)
@@ -68,13 +67,13 @@ def knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
     processes = []
     partSize = len(combinations) // cpuCount
     for i in range(cpuCount):
-        print("invoke process")
         start = i * partSize
         end = start + partSize
 
         process = multiprocessing.Process(target=calc_combination, args=(knapsackCapacity, weights, values, start, end, combinations, queue))
         process.start()
         processes.append(process)
+        print(len(processes))
 
     for process in processes:
         process.join()
@@ -110,6 +109,27 @@ def greedy_algorithm(weights, values, capacity):
                 return value2, secondCombination
 
 
+def dynamic_knapsack(weights, values, itemCount, capacity):
+    if values[0] <= capacity:
+        bestCombination = [(0, 0, set()), (values[0], weights[0], {1})]
+    else:
+        bestCombination = [(0, 0, set())]
+    for i in range(0, itemCount):
+        temp = bestCombination
+        secondCombination = []
+        for k, w, T in temp:
+            if w + weights[i] <= capacity:
+                secondCombination.append((k + values[i], w + weights[i], T.union({i + 1})))
+        temp.extend(secondCombination)
+        temp = sorted(temp, key=lambda x: (x[0], -x[1]))
+        bestCombination = [temp[0]]
+        for j in range(1, len(temp)):
+            if temp[j][0] != temp[j-1][0]:
+                bestCombination.append(temp[j])
+    m, w, T = max(bestCombination, key=lambda x: x[0])
+    return m, list(T)
+
+
 if __name__ == "__main__":
     itemCount = int(config['Test1']['itemCount'])
     vMin = int(config['Test1']['vMin'])
@@ -120,34 +140,91 @@ if __name__ == "__main__":
 
     weights, values = generate_items(itemCount, wMin, wMax, vMin, vMax)
 
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    if rank == 0:
+        port = MPI.COMM_WORLD.Bind(port=65525)
+        print("Bound to port", port)
+    else:
+        port = None
+
+    port = comm.bcast(port, root=0)
+
+    if port is not None:
+        comm = MPI.COMM_WORLD.Connect(port)
+        print("Connected to rank 0 on port", port)
+
+    size = comm.Get_size()
+    print(size)
+
+    chunk_size = itemCount // size
+    chunks = [None] * size
+    chunks[rank] = (weights[rank * chunk_size:(rank + 1) * chunk_size], values[rank * chunk_size:(rank + 1) * chunk_size])
+
+    chunk = comm.scatter(chunks, root=0)
+    w_chunk, v_chunk = chunk
+
+    total = 0
+    if rank == 0:
+        for i in range(1, size):
+            received_value = comm.recv(source=i)
+            total += received_value
+        print(total)
+    elif rank == 0 and size == 1:
+        total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
+        print(total)
+    elif rank > 0:
+        total = dynamic_knapsack(w_chunk, v_chunk, len(w_chunk), knapsackCapacity)
+        comm.send(total, dest=0)
+
     # Non parallelized
-    timeStart = time.time()
-    theBest = knapsack_bruteforce(weights, values, itemCount, knapsackCapacity)
-    timeStop = time.time()
+    def run_bruteforce():
+        timeStart = time.time()
+        theBest = knapsack_bruteforce(weights, values, itemCount, knapsackCapacity)
+        timeStop = time.time()
 
-    timeResult = timeStop - timeStart
+        timeResult = timeStop - timeStart
 
-    print("Non parallelized")
-    print(theBest)
-    print("TIME " + str(timeResult))
+        print("Non parallelized")
+        print(theBest)
+        print("TIME " + str(timeResult))
 
     # parallelized
-    #timeStart2 = time.time()
-    #theBestParallel = knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
-    #timeStop2 = time.time()
+    def run_bruteforce_parallelized():
+        timeStart2 = time.time()
+        theBestParallel = knapsack_bruteforce_processing(weights, values, itemCount, knapsackCapacity)
+        timeStop2 = time.time()
 
-    #timeResultParallelized = timeStop2 - timeStart2
+        timeResultParallelized = timeStop2 - timeStart2
 
-    #print("parallelized")
-    #print(theBestParallel)
-    #print("TIME " + str(timeResultParallelized))
+        print("parallelized")
+        print(theBestParallel)
+        print("TIME " + str(timeResultParallelized))
 
-    timeStartGreedy = time.time()
-    theBestGreedy = greedy_algorithm(weights, values, knapsackCapacity)
-    timeStopGreedy = time.time()
+    # greedy
+    def run_greedy():
+        timeStartGreedy = time.time()
+        theBestGreedy = greedy_algorithm(weights, values, knapsackCapacity)
+        timeStopGreedy = time.time()
 
-    timeResultGreedy = timeStopGreedy - timeStartGreedy
+        timeResultGreedy = timeStopGreedy - timeStartGreedy
 
-    print("Greedy heuristic")
-    print(theBestGreedy)
-    print("TIME " + str(timeResultGreedy))
+        print("Greedy heuristic")
+        print(theBestGreedy)
+        print("TIME " + str(timeResultGreedy))
+
+    # dynamic
+    def run_dynamic():
+        timeStartDynamic = time.time()
+        theBestDynamic = dynamic_knapsack(weights, values, itemCount, knapsackCapacity)
+        timeStopDynamic = time.time()
+
+        timeResultDynamic = timeStopDynamic - timeStartDynamic
+
+        print("Dynamic")
+        print(theBestDynamic)
+        print("TIME " + str(timeResultDynamic))
+
+
+    # run_bruteforce()
+    # run_dynamic()
